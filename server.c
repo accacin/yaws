@@ -10,15 +10,17 @@
 #include <unistd.h>
 
 #define BACKLOG 10
+#define MAXLINE 4096
 
 int main(int argc, char *argv[]) {
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_storage their_addr;
   socklen_t sin_size;
-  int sockfd, new_fd;
+  int sockfd, new_fd, rv, n;
   int yes = 1;
   char s[INET6_ADDRSTRLEN];
-  int rv;
+  uint8_t buff[MAXLINE + 1];
+  uint8_t recvline[MAXLINE + 1];
 
   if (argc != 2) {
     fprintf(stderr, "no port specified\n");
@@ -66,4 +68,29 @@ int main(int argc, char *argv[]) {
   }
   printf("Server: listening on port %s\n", argv[1]);
   printf("Waiting for connections...\n");
+
+  for (;;) {
+    sin_size = sizeof their_addr;
+    new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+    memset(recvline, 0, MAXLINE);
+
+    while ((n = read(new_fd, recvline, MAXLINE - 1)) != -1) {
+      fprintf(stdout, "\n%s", recvline);
+
+      if (recvline[n - 1] == '\n') {
+        break;
+      }
+
+      memset(recvline, 0, MAXLINE);
+    }
+
+    if (n < 0) {
+      perror("read error");
+      exit(1);
+    }
+
+    snprintf((char *)buff, sizeof(buff), "HTTP/1.0 200 OK\r\n\r\nHello");
+    write(new_fd, (char *)buff, strlen((char *)buff));
+    close(new_fd);
+  }
 }
